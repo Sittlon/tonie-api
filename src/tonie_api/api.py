@@ -9,7 +9,14 @@ from string import Template
 import requests
 from requests.exceptions import HTTPError
 
-from tonie_api.models import Chapter, Config, CreativeTonie, FileUploadRequest, Household, User
+from tonie_api.models import (
+    Chapter,
+    Config,
+    CreativeTonie,
+    FileUploadRequest,
+    Household,
+    User,
+)
 from tonie_api.session import TonieCloudSession
 
 log = logging.getLogger(__name__)
@@ -32,16 +39,23 @@ class TonieAPI:
     def __init__(self, username: str, password: str, timeout: int = 30) -> None:
         """Initializes the API and creates a session token for tonie cloud session."""
         self.session = TonieCloudSession()
-        self.session.acquire_token(username=username, password=password, timeout=timeout)
+        self.session.acquire_token(
+            username=username, password=password, timeout=timeout
+        )
 
         if self.session.token is None:
             msg = "Failed to acquire session token. Please check your credentials or network connection."
             raise ValueError(msg)
-    def __request(self, url: str, request_type: HttpMethod, data: dict | None = None) -> dict:
+
+    def __request(
+        self, url: str, request_type: HttpMethod, data: dict | None = None
+    ) -> dict:
         headers = {"Authorization": f"Bearer {self.session.token}"}
         if not data:
             data = {}
-        resp = self.session.request(request_type.name, f"{self.API_URL}/{url}", headers=headers, json=data)
+        resp = self.session.request(
+            request_type.name, f"{self.API_URL}/{url}", headers=headers, json=data
+        )
         if not resp.ok:
             log.error("HTTP request failed: %s", resp)
             return {}
@@ -87,7 +101,9 @@ class TonieAPI:
         url = "households"
         return [Household(**x) for x in self._get(url)]
 
-    def get_all_creative_tonies_by_household(self, household: Household) -> list[CreativeTonie]:
+    def get_all_creative_tonies_by_household(
+        self, household: Household
+    ) -> list[CreativeTonie]:
         """Get all creative tonies by a given household.
 
         Args:
@@ -97,7 +113,10 @@ class TonieAPI:
             Lis[CreativeTonie]: A list of all creative tonies, which belong to the given household.
         """
         url = Template("households/$household_id/creativetonies")
-        return [CreativeTonie(**ct) for ct in self._get(url=url.substitute(household_id=household.id))]
+        return [
+            CreativeTonie(**ct)
+            for ct in self._get(url=url.substitute(household_id=household.id))
+        ]
 
     def get_all_creative_tonies(self) -> list[CreativeTonie]:
         """Get all creative tonies of the logged in user.
@@ -112,7 +131,9 @@ class TonieAPI:
             for ct in self._get(url=url.substitute(household_id=household.id))
         ]
 
-    def upload_file_to_tonie(self, creative_tonie: CreativeTonie, file: Path | str, title: str) -> None:
+    def upload_file_to_tonie(
+        self, creative_tonie: CreativeTonie, file: Path | str, title: str
+    ) -> None:
         """Upload file to toniecloud and append as new chapter to tonie.
 
         Args:
@@ -126,7 +147,11 @@ class TonieAPI:
         file = Path(file)
         mime_type = mimetypes.guess_type(file)
         upload_request = FileUploadRequest(**self._post("file"))
-        log.debug("fileId: %s - fields %s", upload_request.fileId, upload_request.request.fields)
+        log.debug(
+            "fileId: %s - fields %s",
+            upload_request.fileId,
+            upload_request.request.fields,
+        )
         # upload to Amazon S3
         try:
             with file.open("rb") as _fs:
@@ -134,7 +159,11 @@ class TonieAPI:
                     upload_request.request.url,
                     data=upload_request.request.fields,
                     files={
-                        "file": (upload_request.request.fields["key"], _fs, mime_type[0] if mime_type else None),
+                        "file": (
+                            upload_request.request.fields["key"],
+                            _fs,
+                            mime_type[0] if mime_type else None,
+                        ),
                     },
                     timeout=180,
                 )
@@ -146,7 +175,9 @@ class TonieAPI:
         # add chapter to creative tonie
         self.add_chapter_to_tonie(creative_tonie, upload_request.fileId, title)
 
-    def add_chapter_to_tonie(self, creative_tonie: CreativeTonie, file_id: str, title: str) -> None:
+    def add_chapter_to_tonie(
+        self, creative_tonie: CreativeTonie, file_id: str, title: str
+    ) -> None:
         """Add a chapter to a given tonie with file_id and title.
 
         Args:
@@ -157,7 +188,9 @@ class TonieAPI:
         url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}/chapters"
         self._post(url=url, data={"title": title, "file": file_id})
 
-    def sort_chapter_of_tonie(self, creative_tonie: CreativeTonie, sort_list: list[Chapter]) -> None:
+    def sort_chapter_of_tonie(
+        self, creative_tonie: CreativeTonie, sort_list: list[Chapter]
+    ) -> None:
         """Sort all chapters of the tonie to the given list.
 
         Args:
@@ -165,7 +198,9 @@ class TonieAPI:
             sort_list (list[Chapter]): A list of all chapters in the correct order.
         """
         url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}"
-        self._patch(url=url, data={"chapters": [dict(chapter) for chapter in sort_list]})
+        self._patch(
+            url=url, data={"chapters": [dict(chapter) for chapter in sort_list]}
+        )
 
     def clear_all_chapter_of_tonie(self, creative_tonie: CreativeTonie) -> None:
         """Clear all chapter of given tonie.
@@ -175,3 +210,27 @@ class TonieAPI:
         """
         url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}"
         self._patch(url=url, data={"chapters": []})
+
+    def remove_chapter_from_tonie(self, creative_tonie: CreativeTonie, chapter: Chapter) -> None:
+        """Removes a chapter from a given tonie.
+
+        Args:
+            creative_tonie (CreativeTonie): _The tonie to clear all chapters on.
+            chapter (Chapter): _The chapter which should be removed.
+        """
+        chapters = creative_tonie.chapters
+        chapters.remove(chapter)
+
+        chapter_json = [
+            {
+                "id": chapter.id,
+                "title": chapter.title,
+                "file": chapter.file,
+                "seconds": chapter.seconds,
+                "transcoding": chapter.transcoding,
+            }
+            for chapter in chapters
+        ]
+
+        url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}"
+        self._patch(url=url, data={"chapters": chapter_json})
