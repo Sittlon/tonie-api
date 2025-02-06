@@ -210,27 +210,3 @@ class TonieAPI:
         """
         url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}"
         self._patch(url=url, data={"chapters": []})
-
-    def remove_chapter_from_tonie(self, creative_tonie: CreativeTonie, chapter: Chapter) -> None:
-        """Removes a chapter from a given tonie.
-
-        Args:
-            creative_tonie (CreativeTonie): _The tonie to clear all chapters on.
-            chapter (Chapter): _The chapter which should be removed.
-        """
-        chapters = creative_tonie.chapters
-        chapters.remove(chapter)
-
-        chapter_json = [
-            {
-                "id": chapter.id,
-                "title": chapter.title,
-                "file": chapter.file,
-                "seconds": chapter.seconds,
-                "transcoding": chapter.transcoding,
-            }
-            for chapter in chapters
-        ]
-
-        url = f"households/{creative_tonie.householdId}/creativetonies/{creative_tonie.id}"
-        self._patch(url=url, data={"chapters": chapter_json})
